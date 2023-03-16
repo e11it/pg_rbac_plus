@@ -19,8 +19,9 @@ docker-compose exec -u postgres postgres psql -c 'CREATE DATABASE dwh';
 
 Подключиться к БД с помощью psql
 
+```
 docker-compose exec -u postgres postgres psql
-
+```
 
 Создать схемы и базовую ролевую модель:
 ```
@@ -30,7 +31,7 @@ docker-compose exec -u postgres postgres /bin/bash /opt/scripts/create_schema.sh
 Создать пользователя для выполнения миграций
 
 ```
-docker-compose exec -u postgres postgres psql -c "create user pgmigrate with password '1234' in group dwh_raw_sudo,dwh_ods_sudo,dwh_cdm_sudo;"
+docker-compose exec -u postgres postgres psql -c "create user pgmigrate with password '1234' in group dwh_raw_pgm,dwh_ods_pgm,dwh_cdm_pgm;"
 ```
 
 ```

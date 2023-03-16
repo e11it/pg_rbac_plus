@@ -1,11 +1,14 @@
-Не всегда команды, начинающие использовать `PostgreSQL`, сразу задумываются о ролевой модели и о версионировании модели базы данных.
+Как мы в НЛМК «упростили» PostgreSQL для команд
 
-Мы хотели облегчить им задачу и предложить одну из реализаций ролевой модели и подхода continiuse integration по управлению схемой данных.
-
+Не всегда команды, начинающие использовать PostgreSQL, сразу задумываются о ролевой модели и о версионировании схемы базы данных. Мы хотели облегчить задачу таким командам и предложили один из вариантов ролевой модели вместе с подходом gitops по управлению схемой данных.
 
 ## Ролевая модель.
 
-Мы хотели, чтобы составители миграций, наши пользователи, непосредственно не управляли правами в миграциях, а использовали простой и понятный подход. 
+Я работаю с PostgreSQL более 10 лет и периодически наблюдаю, как команды не задумываются на начальном этапе о ролевой модели базы, или все работает под суперпользователем postgres, забывают про версионирование схемы.
+
+Когда я пришел в НЛМК, то захотел учесть свой опыт и предложить командам «пред настроенный PostgreSQL»
+
+Мы хотели, чтобы составители миграций - наши пользователи не выдавали права на объекты в миграциях, а использовали простой и понятный подход вне их зоны контроля.
 
 Подумав, мы собрали требования к ролевой модели:
 - единицей владения выступает схема и объекты внутри нее
@@ -110,90 +113,102 @@ SET search_path TO DEFAULT ;
 
     
   ```sh
-    # Запускаем postgres и pgadmin
-    $ docker-compose up -d postgres pgadmin
-    
-    # Создаем новую базу данных с именем dwh
-    $ docker-compose exec -u postgres postgres psql -c 'CREATE DATABASE dwh'
-    CREATE DATABASE
-    
-    # Создаем схемы и ролевую модель
-    $ docker-compose exec -u postgres postgres /bin/bash /opt/scripts/create_schema.sh
-    Schema: dwh_raw
-    GRANT dwh_raw_view,dwh_raw_write TO dwh_raw_owner
-    GRANT dwh_raw_view TO dwh_raw_sudo
-    GRANT dwh_raw_owner TO dwh_raw_sudo
-    GRANT CONNECT ON DATABASE dwh TO dwh_raw_view
-    GRANT dwh_raw_view TO dwh_raw_write
-    GRANT usage ON SCHEMA raw TO dwh_raw_view
-    GRANT ALL ON SCHEMA raw TO dwh_raw_owner
-    GRANT ALL ON SCHEMA raw TO dwh_raw_sudo
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_raw_owner IN SCHEMA raw GRANT SELECT ON SEQUENCES TO dwh_raw_view
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_raw_owner IN SCHEMA raw GRANT SELECT ON TABLES TO dwh_raw_view
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_raw_owner IN SCHEMA raw GRANT ALL ON SEQUENCES TO dwh_raw_write
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_raw_owner IN SCHEMA raw GRANT EXECUTE ON FUNCTIONS TO dwh_raw_write
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_raw_owner IN SCHEMA raw GRANT INSERT,UPDATE,DELETE,TRUNCATE ON TABLES TO dwh_raw_write
-    Schema: dwh_ods
-    GRANT dwh_ods_view,dwh_ods_write TO dwh_ods_owner
-    GRANT dwh_ods_view TO dwh_ods_sudo
-    GRANT dwh_ods_owner TO dwh_ods_sudo
-    GRANT CONNECT ON DATABASE dwh TO dwh_ods_view
-    GRANT dwh_ods_view TO dwh_ods_write
-    GRANT usage ON SCHEMA ods TO dwh_ods_view
-    GRANT ALL ON SCHEMA ods TO dwh_ods_owner
-    GRANT ALL ON SCHEMA ods TO dwh_ods_sudo
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_ods_owner IN SCHEMA ods GRANT SELECT ON SEQUENCES TO dwh_ods_view
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_ods_owner IN SCHEMA ods GRANT SELECT ON TABLES TO dwh_ods_view
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_ods_owner IN SCHEMA ods GRANT ALL ON SEQUENCES TO dwh_ods_write
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_ods_owner IN SCHEMA ods GRANT EXECUTE ON FUNCTIONS TO dwh_ods_write
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_ods_owner IN SCHEMA ods GRANT INSERT,UPDATE,DELETE,TRUNCATE ON TABLES TO dwh_ods_write
-    Schema: dwh_cdm
-    GRANT dwh_cdm_view,dwh_cdm_write TO dwh_cdm_owner
-    GRANT dwh_cdm_view TO dwh_cdm_sudo
-    GRANT dwh_cdm_owner TO dwh_cdm_sudo
-    GRANT CONNECT ON DATABASE dwh TO dwh_cdm_view
-    GRANT dwh_cdm_view TO dwh_cdm_write
-    GRANT usage ON SCHEMA cdm TO dwh_cdm_view
-    GRANT ALL ON SCHEMA cdm TO dwh_cdm_owner
-    GRANT ALL ON SCHEMA cdm TO dwh_cdm_sudo
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_cdm_owner IN SCHEMA cdm GRANT SELECT ON SEQUENCES TO dwh_cdm_view
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_cdm_owner IN SCHEMA cdm GRANT SELECT ON TABLES TO dwh_cdm_view
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_cdm_owner IN SCHEMA cdm GRANT ALL ON SEQUENCES TO dwh_cdm_write
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_cdm_owner IN SCHEMA cdm GRANT EXECUTE ON FUNCTIONS TO dwh_cdm_write
-    ALTER DEFAULT PRIVILEGES FOR ROLE dwh_cdm_owner IN SCHEMA cdm GRANT INSERT,UPDATE,DELETE,TRUNCATE ON TABLES TO dwh_cdm_write
-    
-    # Создаем пользователя для выполнения миграций и добавляем в sudo группы
-    $ docker-compose exec -u postgres postgres psql -c "create user pgmigrate with password '1234' in group dwh_raw_sudo,dwh_ods_sudo,dwh_cdm_sudo;"
-    CREATE ROLE
-    
-    # Выполняем миграции
-    $ docker-compose run pgmigrate bash /opt/scripts/do_migrate.sh
-    + pgmigrate -d /opt/migrations/dwh/raw -v -m raw --check_serial_versions -t latest migrate
-    + pgmigrate -d /opt/migrations/dwh/ods -v -m ods --check_serial_versions -t latest migrate
-    + pgmigrate -d /opt/migrations/dwh/cdm -v -m cdm --check_serial_versions -t latest migrate
+# Запускаем postgres и pgadmin
+$ docker-compose up -d postgres pgadmin
+# Создаем новую базу данных с именем dwh
+$ docker-compose exec -u postgres postgres psql -c 'CREATE DATABASE dwh'
+CREATE DATABASE
+# Создаем схемы и ролевую модель
+$ docker-compose exec -u postgres postgres /bin/bash /opt/scripts/create_schema.sh
+Schema: dwh_raw
+GRANT dwh_raw_view,dwh_raw_write TO dwh_raw_owner
+GRANT dwh_raw_view TO dwh_raw_sudo
+GRANT dwh_raw_owner TO dwh_raw_sudo
+GRANT CONNECT ON DATABASE dwh TO dwh_raw_view
+GRANT dwh_raw_view TO dwh_raw_write
+GRANT usage ON SCHEMA raw TO dwh_raw_view
+GRANT ALL ON SCHEMA raw TO dwh_raw_owner
+GRANT ALL ON SCHEMA raw TO dwh_raw_pgm
+GRANT dwh_raw_sudo TO dwh_raw_pgm
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_raw_owner IN SCHEMA raw GRANT SELECT ON SEQUENCES TO dwh_raw_view
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_raw_owner IN SCHEMA raw GRANT SELECT ON TABLES TO dwh_raw_view
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_raw_owner IN SCHEMA raw GRANT ALL ON SEQUENCES TO dwh_raw_write
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_raw_owner IN SCHEMA raw GRANT EXECUTE ON FUNCTIONS TO dwh_raw_write
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_raw_owner IN SCHEMA raw GRANT INSERT,UPDATE,DELETE,TRUNCATE ON TABLES TO dwh_raw_write
+Schema: dwh_ods
+GRANT dwh_ods_view,dwh_ods_write TO dwh_ods_owner
+GRANT dwh_ods_view TO dwh_ods_sudo
+GRANT dwh_ods_owner TO dwh_ods_sudo
+GRANT CONNECT ON DATABASE dwh TO dwh_ods_view
+GRANT dwh_ods_view TO dwh_ods_write
+GRANT usage ON SCHEMA ods TO dwh_ods_view
+GRANT ALL ON SCHEMA ods TO dwh_ods_owner
+GRANT ALL ON SCHEMA ods TO dwh_ods_pgm
+GRANT dwh_ods_sudo TO dwh_ods_pgm
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_ods_owner IN SCHEMA ods GRANT SELECT ON SEQUENCES TO dwh_ods_view
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_ods_owner IN SCHEMA ods GRANT SELECT ON TABLES TO dwh_ods_view
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_ods_owner IN SCHEMA ods GRANT ALL ON SEQUENCES TO dwh_ods_write
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_ods_owner IN SCHEMA ods GRANT EXECUTE ON FUNCTIONS TO dwh_ods_write
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_ods_owner IN SCHEMA ods GRANT INSERT,UPDATE,DELETE,TRUNCATE ON TABLES TO dwh_ods_write
+Schema: dwh_cdm
+GRANT dwh_cdm_view,dwh_cdm_write TO dwh_cdm_owner
+GRANT dwh_cdm_view TO dwh_cdm_sudo
+GRANT dwh_cdm_owner TO dwh_cdm_sudo
+GRANT CONNECT ON DATABASE dwh TO dwh_cdm_view
+GRANT dwh_cdm_view TO dwh_cdm_write
+GRANT usage ON SCHEMA cdm TO dwh_cdm_view
+GRANT ALL ON SCHEMA cdm TO dwh_cdm_owner
+GRANT ALL ON SCHEMA cdm TO dwh_cdm_pgm
+GRANT dwh_cdm_sudo TO dwh_cdm_pgm
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_cdm_owner IN SCHEMA cdm GRANT SELECT ON SEQUENCES TO dwh_cdm_view
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_cdm_owner IN SCHEMA cdm GRANT SELECT ON TABLES TO dwh_cdm_view
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_cdm_owner IN SCHEMA cdm GRANT ALL ON SEQUENCES TO dwh_cdm_write
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_cdm_owner IN SCHEMA cdm GRANT EXECUTE ON FUNCTIONS TO dwh_cdm_write
+ALTER DEFAULT PRIVILEGES FOR ROLE dwh_cdm_owner IN SCHEMA cdm GRANT INSERT,UPDATE,DELETE,TRUNCATE ON TABLES TO dwh_cdm_write
 
-    # Подключаемся к базе dwh с помощью psql
-    $ docker-compose exec -u postgres postgres psql -d dwh
-    psql (15.1 (Debian 15.1-1.pgdg110+1))
-    Type "help" for help.
+# Создаем пользователя для выполнения миграций и добавляем в _pgm группы схем
+$ docker-compose exec -u postgres postgres psql -c "create user pgmigrate with password '1234' in group dwh_raw_pgm,dwh_ods_pgm,dwh_cdm_pgm;"
+CREATE ROLE
 
-    dwh=# \dn
-          List of schemas
-      Name  |       Owner
-    --------+-------------------
-     cdm    | postgres
-     ods    | postgres
-     public | pg_database_owner
-     raw    | postgres
-    (4 rows)
+# Выполняем миграции
+$ docker-compose run pgmigrate bash /opt/scripts/do_migrate.sh
++ pgmigrate -d /opt/migrations/dwh/raw -v -m raw --check_serial_versions -t latest migrate
++ pgmigrate -d /opt/migrations/dwh/ods -v -m ods --check_serial_versions -t latest migrate
++ pgmigrate -d /opt/migrations/dwh/cdm -v -m cdm --check_serial_versions -t latest migrate
 
-    dwh=# \dt raw.*
-                    List of relations
-     Schema |      Name      | Type  |     Owner
-    --------+----------------+-------+---------------
-     raw    | foo            | table | dwh_raw_owner
-     raw    | schema_version | table | pgmigrate
-    (2 rows)
+# Подключаемся к базе dwh с помощью psql
+$ docker-compose exec -u postgres postgres psql -d dwh
+psql (15.1 (Debian 15.1-1.pgdg110+1))
+Type "help" for help.
+# Наши созданные скриптом create_schema.sh схемы
+dwh=# \dn
+List of schemas
+Name  |       Owner
+--------+-------------------
+cdm    | postgres
+ods    | postgres
+public | pg_database_owner
+raw    | postgres
+(4 rows)
+
+# Таблица foo создана pgmigrate c владельцем dwh_raw_owner
+# Таблица schema_version - техническая для pgmigrate, без Access privileges
+dwh=# \dt raw.*
+List of relations
+Schema |      Name      | Type  |     Owner
+--------+----------------+-------+---------------
+raw    | foo            | table | dwh_raw_owner
+raw    | schema_version | table | pgmigrate
+
+dwh=# \dp raw.*
+Access privileges
+Schema |      Name      | Type  |          Access privileges          | Column privileges | Policies
+--------+----------------+-------+-------------------------------------+-------------------+----------
+raw    | foo            | table | dwh_raw_view=r/dwh_raw_owner       +|                   |
+|                |       | dwh_raw_write=awdD/dwh_raw_owner   +|                   |
+|                |       | dwh_raw_owner=arwdDxt/dwh_raw_owner |                   |
+raw    | schema_version | table |                                     |
+(2 rows)
   ```
 </details>
 

@@ -60,6 +60,8 @@ for schema in "${SCHEMES[@]}"; do
 	create_role "${DB_SCHEMA}_owner" "NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN"
 	# Роль позволяющая сделать set role *_owner. Сама по себе на дает прав owner т.к. noinherit
 	create_role "${DB_SCHEMA}_sudo" "NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOLOGIN"
+	# Роль для миграций
+	create_role "${DB_SCHEMA}_pgm" "NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN"
 	# Роль *_owner так же может управлять членством в группах _view и _write
 	${PSQL} -c "GRANT ${DB_SCHEMA}_view,${DB_SCHEMA}_write TO ${DB_SCHEMA}_owner"
 	${PSQL} -c "GRANT ${DB_SCHEMA}_view TO ${DB_SCHEMA}_sudo"
@@ -68,7 +70,8 @@ for schema in "${SCHEMES[@]}"; do
 	${PSQL} -c "GRANT ${DB_SCHEMA}_view TO ${DB_SCHEMA}_write"
 	${PSQL} -c "GRANT usage ON SCHEMA ${schema} TO ${DB_SCHEMA}_view"
 	${PSQL} -c "GRANT ALL ON SCHEMA ${schema} TO ${DB_SCHEMA}_owner"
-	${PSQL} -c "GRANT ALL ON SCHEMA ${schema} TO ${DB_SCHEMA}_sudo"
+	${PSQL} -c "GRANT ALL ON SCHEMA ${schema} TO ${DB_SCHEMA}_pgm"
+	${PSQL} -c "GRANT ${DB_SCHEMA}_sudo TO ${DB_SCHEMA}_pgm"
 	${PSQL} -c "ALTER DEFAULT PRIVILEGES FOR ROLE ${DB_SCHEMA}_owner IN SCHEMA ${schema} GRANT SELECT ON SEQUENCES TO ${DB_SCHEMA}_view"
         ${PSQL} -c "ALTER DEFAULT PRIVILEGES FOR ROLE ${DB_SCHEMA}_owner IN SCHEMA ${schema} GRANT SELECT ON TABLES TO ${DB_SCHEMA}_view"
 	${PSQL} -c "ALTER DEFAULT PRIVILEGES FOR ROLE ${DB_SCHEMA}_owner IN SCHEMA ${schema} GRANT ALL ON SEQUENCES TO ${DB_SCHEMA}_write"
